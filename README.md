@@ -78,3 +78,7 @@ Sources/Voicedic/
   Views/                    menu and settings UI
   TestMode.swift            headless --transcribe / --refine
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
