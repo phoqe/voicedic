@@ -5,6 +5,7 @@ struct Microphone: Identifiable, Hashable, Sendable {
     /// Core Audio's device UID, stable across reconnects and restarts (unlike its AudioDeviceID).
     let uid: String
     let name: String
+    let isBuiltIn: Bool
 
     var id: String { uid }
 }
@@ -13,8 +14,15 @@ struct Microphone: Identifiable, Hashable, Sendable {
 @MainActor
 @Observable
 final class Microphones {
+    /// Saved selection meaning "follow the system default input". An empty selection means automatic.
+    static let systemDefaultSelection = "system-default"
+
     private(set) var all: [Microphone] = []
     private(set) var systemDefault: Microphone?
+
+    /// What automatic records from: the Mac's own microphone, so connecting AirPods or another headset
+    /// doesn't move dictation onto it. Falls back to the system default on Macs without one.
+    var automatic: Microphone? { all.first(where: \.isBuiltIn) ?? systemDefault }
 
     init() {
         refresh()
@@ -33,9 +41,14 @@ final class Microphones {
         systemDefault = devices.first { $0.id == defaultID }?.microphone
     }
 
-    /// The device to record from for a saved UID, or nil if it isn't connected.
-    static func deviceID(forUID uid: String) -> AudioDeviceID? {
-        inputDevices().first { $0.microphone.uid == uid }?.id
+    /// The device to record from for a saved selection: a device UID, empty for automatic, or
+    /// `systemDefaultSelection`. A disconnected device falls back to automatic. nil means the system
+    /// default input.
+    static func deviceID(for selection: String) -> AudioDeviceID? {
+        guard selection != systemDefaultSelection else { return nil }
+        let devices = inputDevices()
+        if let chosen = devices.first(where: { $0.microphone.uid == selection }) { return chosen.id }
+        return devices.first(where: \.microphone.isBuiltIn)?.id
     }
 
     // MARK: - Core Audio
@@ -53,7 +66,8 @@ final class Microphones {
                 let uid = string(id, kAudioDevicePropertyDeviceUID),
                 let name = string(id, kAudioObjectPropertyName)
             else { return nil }
-            return (id, Microphone(uid: uid, name: name))
+            let isBuiltIn = uint32(id, kAudioDevicePropertyTransportType) == kAudioDeviceTransportTypeBuiltIn
+            return (id, Microphone(uid: uid, name: name, isBuiltIn: isBuiltIn))
         }
     }
 

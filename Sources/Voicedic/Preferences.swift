@@ -79,7 +79,8 @@ final class Preferences {
         }
     }
 
-    /// Core Audio UID of the input device. Empty means the system default.
+    /// Core Audio UID of the input device, empty for automatic (the built-in mic), or
+    /// `Microphones.systemDefaultSelection`.
     var microphoneUID: String {
         didSet { defaults.set(microphoneUID, forKey: Key.microphoneUID) }
     }

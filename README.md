@@ -28,7 +28,8 @@ The only network access in local mode is the one-time model download from Huggin
 | **Esc** | Cancel recording or processing |
 
 Settings (menu bar icon → Settings…) has the microphone, speech model, cleanup backend, extra instructions,
-a vocabulary list for names and jargon, and a local history of dictations. Launch at login is on by
+a vocabulary list for names and jargon, and a local history of dictations. The microphone defaults to
+the Mac's built-in one, so connecting AirPods doesn't move dictation onto their mic. Launch at login is on by
 default once the app runs from /Applications; turn it off in Settings.
 
 Set **System Settings → Keyboard → Press 🌐 key to → Do Nothing** so the Globe key doesn't also open

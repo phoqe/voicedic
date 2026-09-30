@@ -65,7 +65,8 @@ private struct MicrophonePicker: View {
 
     var body: some View {
         Picker("Microphone", selection: $selection) {
-            Text(microphones.systemDefault.map { "System default (\($0.name))" } ?? "System default").tag("")
+            Text(label("Automatic", microphones.automatic)).tag("")
+            Text(label("System default", microphones.systemDefault)).tag(Microphones.systemDefaultSelection)
             Divider()
             ForEach(microphones.all) { Text($0.name).tag($0.uid) }
             if isDisconnected {
@@ -73,13 +74,18 @@ private struct MicrophonePicker: View {
             }
         }
         if isDisconnected {
-            Text("Not connected. Using the system default until it's back.")
+            Text("Not connected. Using automatic until it's back.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
 
     private var isDisconnected: Bool {
-        !selection.isEmpty && !microphones.all.contains { $0.uid == selection }
+        !selection.isEmpty && selection != Microphones.systemDefaultSelection
+            && !microphones.all.contains { $0.uid == selection }
+    }
+
+    private func label(_ title: String, _ microphone: Microphone?) -> String {
+        microphone.map { "\(title) (\($0.name))" } ?? title
     }
 }
 

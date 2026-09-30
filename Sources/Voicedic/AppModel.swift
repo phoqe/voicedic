@@ -287,13 +287,8 @@ final class AppModel {
         }
 
         targetApp = NSWorkspace.shared.frontmostApplication
-        var device: AudioDeviceID?
-        if !prefs.microphoneUID.isEmpty {
-            device = Microphones.deviceID(forUID: prefs.microphoneUID)
-            if device == nil { log.notice("Chosen microphone isn't connected, using the system default") }
-        }
         do {
-            try recorder.start(device: device)
+            try recorder.start(device: Microphones.deviceID(for: prefs.microphoneUID))
         } catch {
             overlay.flash(error.localizedDescription, isError: true)
             return
