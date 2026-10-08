@@ -44,8 +44,8 @@ final class AppModel {
     @ObservationIgnored private var refiner: (any Refiner)?
     @ObservationIgnored private var refinerSignature: String?
 
-    @ObservationIgnored private var pressStart: Date?
-    @ObservationIgnored private var recordingStart: Date?
+    /// When Fn went down, in event time (seconds since startup).
+    @ObservationIgnored private var pressStart: TimeInterval?
     /// Set after a short Fn tap while we wait to see if a second tap (hands-free) follows.
     @ObservationIgnored private var pendingTapTimeout: Task<Void, Never>?
     @ObservationIgnored private var ignoreNextFnUp = false
@@ -206,10 +206,10 @@ final class AppModel {
     /// Hold Fn to talk. Double-tap Fn for hands-free; press Fn again to finish. Esc cancels.
     private func handle(_ event: HotkeyMonitor.Event) -> Bool {
         switch event {
-        case .fnDown:
+        case .fnDown(let time):
             switch phase {
             case .idle:
-                pressStart = Date()
+                pressStart = time
                 startRecording()
             case .recording(handsFree: false) where pendingTapTimeout != nil:
                 // Second tap: lock into hands-free mode.
@@ -226,13 +226,13 @@ final class AppModel {
             }
             return false
 
-        case .fnUp:
+        case .fnUp(let time):
             if ignoreNextFnUp {
                 ignoreNextFnUp = false
                 return false
             }
             guard case .recording(handsFree: false) = phase, let pressStart else { return false }
-            if Date().timeIntervalSince(pressStart) >= Self.holdThreshold {
+            if time - pressStart >= Self.holdThreshold {
                 finishRecording()
             } else {
                 // A quick tap. Keep recording briefly in case a second tap follows.
@@ -287,13 +287,12 @@ final class AppModel {
         }
 
         targetApp = NSWorkspace.shared.frontmostApplication
-        do {
-            try recorder.start(device: Microphones.deviceID(for: prefs.microphoneUID))
-        } catch {
-            overlay.flash(error.localizedDescription, isError: true)
-            return
+        recorder.start(device: Microphones.deviceID(for: prefs.microphoneUID)) { [weak self] error in
+            // Once the recording has finished, stopping the recorder reports the error instead.
+            guard let self, case .recording = self.phase else { return }
+            self.cancelRecording()
+            self.overlay.flash(error.localizedDescription, isError: true)
         }
-        recordingStart = Date()
         phase = .recording(handsFree: false)
         overlay.show(.recording(handsFree: false))
         prepareRefiner()
@@ -313,23 +312,25 @@ final class AppModel {
         pendingTapTimeout = nil
         guard case .recording = phase else { return }
 
-        let samples = recorder.stop()
-        let audioSeconds = Date().timeIntervalSince(recordingStart ?? Date())
-
-        guard let samples, audioSeconds >= 0.25 else {
-            phase = .idle
-            overlay.hide()
-            return
-        }
-
         phase = .transcribing
-        overlay.show(.working("Transcribing…"))
         let appName = targetApp?.localizedName
-        pipelineTask = Task { await runPipeline(samples: samples, audioSeconds: audioSeconds, appName: appName) }
+        pipelineTask = Task { await runPipeline(appName: appName) }
     }
 
-    private func runPipeline(samples: [Float], audioSeconds: Double, appName: String?) async {
+    private func runPipeline(appName: String?) async {
         do {
+            let samples = try await recorder.stop() ?? []
+            // Esc already reset the state, and a new recording may have started since.
+            guard !Task.isCancelled else { return }
+            let audioSeconds = Double(samples.count) / 16_000
+            guard audioSeconds >= 0.25 else {
+                phase = .idle
+                pipelineTask = nil
+                overlay.hide()
+                return
+            }
+            overlay.show(.working("Transcribing…"))
+
             let transcribeStart = Date()
             let raw = try await transcriber.transcribe(samples)
             let transcribeSeconds = Date().timeIntervalSince(transcribeStart)

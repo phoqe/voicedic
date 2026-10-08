@@ -5,8 +5,10 @@ import CoreGraphics
 @MainActor
 final class HotkeyMonitor {
     enum Event {
-        case fnDown
-        case fnUp
+        /// `time` is when the key changed, in seconds since startup. Use it for timing gestures:
+        /// events can be handled late if the main thread was busy.
+        case fnDown(time: TimeInterval)
+        case fnUp(time: TimeInterval)
         /// Another key was pressed while Fn was held (an Fn shortcut like Fn+Delete, not dictation).
         case keyWhileFnHeld
         case escape
@@ -54,7 +56,7 @@ final class HotkeyMonitor {
     }
 
     /// Returns true to swallow the event.
-    fileprivate func handle(type: CGEventType, flags: CGEventFlags, keyCode: Int64) -> Bool {
+    fileprivate func handle(type: CGEventType, flags: CGEventFlags, keyCode: Int64, time: TimeInterval) -> Bool {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
@@ -68,9 +70,9 @@ final class HotkeyMonitor {
                 // Fn combined with other modifiers is some other shortcut.
                 let others: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
                 guard flags.intersection(others).isEmpty else { return false }
-                _ = handler?(.fnDown)
+                _ = handler?(.fnDown(time: time))
             } else {
-                _ = handler?(.fnUp)
+                _ = handler?(.fnUp(time: time))
             }
             return false
 
@@ -99,7 +101,9 @@ private func hotkeyTapCallback(
     let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(userInfo).takeUnretainedValue()
     let flags = event.flags
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    // Only fn changes are timed. NSEvent converts the raw timestamp to seconds since startup.
+    let time = (type == .flagsChanged ? NSEvent(cgEvent: event)?.timestamp : nil) ?? ProcessInfo.processInfo.systemUptime
     // The tap's run loop source is on the main run loop.
-    let swallow = MainActor.assumeIsolated { monitor.handle(type: type, flags: flags, keyCode: keyCode) }
+    let swallow = MainActor.assumeIsolated { monitor.handle(type: type, flags: flags, keyCode: keyCode, time: time) }
     return swallow ? nil : Unmanaged.passUnretained(event)
 }
