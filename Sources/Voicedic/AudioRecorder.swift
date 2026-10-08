@@ -60,6 +60,23 @@ final class AudioRecorder: @unchecked Sendable {
         queue.async { [self] in _ = try? stopEngine() }
     }
 
+    /// The last `seconds` captured so far as 16 kHz mono, for the live preview. Doesn't wait for
+    /// `queue`, which can be busy bringing the input up.
+    func recentSamples(seconds: Double) -> [Float] {
+        let tail: [(rate: Double, samples: [Float])] = lock.withLock {
+            var remaining = seconds
+            var parts: [(rate: Double, samples: [Float])] = []
+            for segment in segments.reversed() where remaining > 0 {
+                let count = min(segment.samples.count, Int(remaining * segment.rate))
+                parts.insert((segment.rate, Array(segment.samples.suffix(count))), at: 0)
+                remaining -= Double(count) / segment.rate
+            }
+            return parts
+        }
+        let converter = AudioConverter()
+        return (try? tail.flatMap { try converter.resample($0.samples, from: $0.rate) }) ?? []
+    }
+
     private func startEngine(device: AudioDeviceID?) throws {
         let engine = AVAudioEngine()
         if let device { try engine.inputNode.auAudioUnit.setDeviceID(device) }
