@@ -2,7 +2,8 @@ import Foundation
 
 /// Headless pipeline runner for testing without the UI or a microphone:
 ///
-///     Voicedic --transcribe speech.wav [--model parakeet-v2|parakeet-ultra]
+///     Voicedic --transcribe speech.wav
+///              [--model parakeet-v2|parakeet-ultra|whisper-large-v3-turbo|cohere-transcribe]
 ///              [--refiner apple|claudeCode|ollama|off] [--ollama-model qwen3:4b]
 ///              [--vocab "Voicedic,Linus"] [--repeat 2] [--warm 5]
 ///     Voicedic --refine "um so like this is a test" [same options]

@@ -5,6 +5,8 @@ import Observation
 enum SpeechModel: String, CaseIterable, Identifiable, Sendable {
     case parakeetV2 = "parakeet-v2"
     case parakeetUltra = "parakeet-ultra"
+    case whisperTurbo = "whisper-large-v3-turbo"
+    case cohereTranscribe = "cohere-transcribe"
 
     var id: String { rawValue }
 
@@ -12,20 +14,26 @@ enum SpeechModel: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .parakeetV2: "Parakeet TDT v2 (English)"
         case .parakeetUltra: "Parakeet Ultra (25 languages)"
+        case .whisperTurbo: "Whisper large-v3-turbo (OpenAI)"
+        case .cohereTranscribe: "Cohere Transcribe (English)"
         }
     }
 
     var detail: String {
         switch self {
-        case .parakeetV2: "Most accurate for English. ~500 MB download."
+        case .parakeetV2: "Fastest, and very accurate for English. ~500 MB download."
         case .parakeetUltra: "Multilingual, auto-detects the language. ~630 MB download."
+        case .whisperTurbo: "Leaves out um and uh on its own. Slower than Parakeet. ~630 MB download."
+        case .cohereTranscribe: "Most accurate on the Open ASR Leaderboard. Slower than Parakeet. ~2 GB download."
         }
     }
 
-    var asrVersion: AsrModelVersion {
+    /// The FluidAudio Parakeet version, nil for the other engines.
+    var asrVersion: AsrModelVersion? {
         switch self {
         case .parakeetV2: .v2
         case .parakeetUltra: .ultra
+        case .whisperTurbo, .cohereTranscribe: nil
         }
     }
 }
