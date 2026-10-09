@@ -53,6 +53,8 @@ final class AppModel {
     @ObservationIgnored private var pipelineTask: Task<Void, Never>?
     /// Transcribes the recording so far for the island's live transcript.
     @ObservationIgnored private var previewTask: Task<Void, Never>?
+    /// Pauses playing media during the recording. Its value is whether it paused anything.
+    @ObservationIgnored private var mediaPause: Task<Bool, Never>?
     @ObservationIgnored private var modelLoadTask: Task<Void, Never>?
     @ObservationIgnored private var permissionPoll: Task<Void, Never>?
 
@@ -222,6 +224,7 @@ final class AppModel {
                 ignoreNextFnUp = true
                 phase = .recording(handsFree: true)
                 overlay.show(.recording(handsFree: true))
+                pauseMedia()
             case .recording(handsFree: true):
                 ignoreNextFnUp = true
                 finishRecording()
@@ -239,7 +242,9 @@ final class AppModel {
             if time - pressStart >= Self.holdThreshold {
                 finishRecording()
             } else {
-                // A quick tap. Keep recording briefly in case a second tap follows.
+                // A quick tap. Keep recording briefly in case a second tap follows, but leave media
+                // playing unless one does.
+                resumeMedia()
                 pendingTapTimeout = Task { [weak self] in
                     try? await Task.sleep(for: .seconds(Self.doubleTapWindow))
                     guard !Task.isCancelled, let self else { return }
@@ -301,6 +306,8 @@ final class AppModel {
         overlay.show(.recording(handsFree: false))
         startPreview()
         prepareRefiner()
+        // Wait until it's a hold, so a tap or fn used as a modifier (fn-Delete) doesn't stutter playback.
+        pauseMedia(after: Self.holdThreshold)
     }
 
     /// While recording, transcribes the latest few seconds about twice a second so the island can
@@ -336,6 +343,7 @@ final class AppModel {
         pendingTapTimeout = nil
         guard case .recording = phase else { return }
         recorder.cancel()
+        resumeMedia()
         previewTask?.cancel()
         previewTask = nil
         phase = .idle
@@ -348,6 +356,7 @@ final class AppModel {
         guard case .recording = phase else { return }
 
         phase = .transcribing
+        resumeMedia()
         let appName = targetApp?.localizedName
         let preview = previewTask
         preview?.cancel()
@@ -437,6 +446,28 @@ final class AppModel {
             pipelineTask = nil
             overlay.flash(error.localizedDescription, isError: true)
             log.error("Dictation failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - Media
+
+    /// Pauses music or video that's playing, `delay` seconds from now unless the recording has ended.
+    private func pauseMedia(after delay: TimeInterval = 0) {
+        guard prefs.pauseMedia, mediaPause == nil else { return }
+        mediaPause = Task {
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return false }
+            return await MediaPlayback.pauseIfPlaying()
+        }
+    }
+
+    /// Resumes what `pauseMedia` paused, or keeps it from pausing.
+    private func resumeMedia() {
+        guard let pause = mediaPause else { return }
+        mediaPause = nil
+        pause.cancel()
+        Task {
+            if await pause.value { MediaPlayback.resume() }
         }
     }
 

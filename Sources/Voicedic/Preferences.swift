@@ -73,6 +73,7 @@ final class Preferences {
         static let vocabulary = "vocabulary"
         static let customInstructions = "customInstructions"
         static let appendSpace = "appendSpace"
+        static let pauseMedia = "pauseMedia"
         static let keepHistory = "keepHistory"
     }
 
@@ -134,6 +135,11 @@ final class Preferences {
         didSet { defaults.set(appendSpace, forKey: Key.appendSpace) }
     }
 
+    /// Pause music and videos while dictating, and resume them after.
+    var pauseMedia: Bool {
+        didSet { defaults.set(pauseMedia, forKey: Key.pauseMedia) }
+    }
+
     var keepHistory: Bool {
         didSet { defaults.set(keepHistory, forKey: Key.keepHistory) }
     }
@@ -157,6 +163,7 @@ final class Preferences {
         vocabulary = d.string(forKey: Key.vocabulary) ?? ""
         customInstructions = d.string(forKey: Key.customInstructions) ?? ""
         appendSpace = d.object(forKey: Key.appendSpace) as? Bool ?? true
+        pauseMedia = d.object(forKey: Key.pauseMedia) as? Bool ?? true
         keepHistory = d.object(forKey: Key.keepHistory) as? Bool ?? true
     }
 }

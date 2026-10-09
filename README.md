@@ -32,6 +32,11 @@ a vocabulary list for names and jargon, and a local history of dictations. The m
 the Mac's built-in one, so connecting AirPods doesn't move dictation onto their mic. Launch at login is on by
 default once the app runs from /Applications; turn it off in Settings.
 
+Music and videos that are playing (Music, Spotify, a YouTube tab) pause while you dictate and resume when
+you stop. A quick tap of fn, or fn used with another key, leaves them playing. This uses the private
+MediaRemote framework, and since macOS 15.4 only Apple's processes can ask it what's playing, so Voicedic
+asks through `osascript`. Turn it off in Settings → General.
+
 Set **System Settings → Keyboard → Press 🌐 key to → Do Nothing** so the Globe key doesn't also open
 the emoji picker or system dictation.
 
@@ -73,6 +78,7 @@ Sources/Voicedic/
   Transcriber.swift         Parakeet via FluidAudio
   Refinement/               cleanup prompt, validation, and the three backends
   TextInserter.swift        pasteboard + ⌘V, restoring the previous clipboard
+  MediaPlayback.swift       pauses playing media while dictating
   Overlay.swift             Dynamic Island-style overlay in the notch
   History.swift             local history (~/Library/Application Support/Voicedic)
   Views/                    menu and settings UI
