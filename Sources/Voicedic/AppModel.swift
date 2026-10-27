@@ -25,7 +25,8 @@ final class AppModel {
     }
 
     let prefs = Preferences()
-    let history = HistoryStore()
+    let history: HistoryStore
+    let stats: StatsStore
     let launchAtLogin = LaunchAtLogin()
     let microphones = Microphones()
 
@@ -68,6 +69,12 @@ final class AppModel {
     }
 
     // MARK: - Lifecycle
+
+    init() {
+        let history = HistoryStore()
+        self.history = history
+        stats = StatsStore(seed: history.entries)
+    }
 
     func start() {
         prefs.onSpeechModelChange = { [weak self] in self?.loadSpeechModel() }
@@ -422,6 +429,7 @@ final class AppModel {
             phase = .idle
             pipelineTask = nil
 
+            stats.record(text, seconds: audioSeconds)
             if prefs.keepHistory {
                 history.add(
                     HistoryEntry(
