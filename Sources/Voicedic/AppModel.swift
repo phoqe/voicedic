@@ -314,6 +314,8 @@ final class AppModel {
     /// show the words as they're spoken. Passes run one at a time and stop with the recording.
     private func startPreview() {
         previewTask?.cancel()
+        previewTask = nil
+        guard prefs.showLiveTranscript else { return }
         let recorder = recorder
         let transcriber = transcriber
         let seconds = Self.previewSeconds

@@ -40,6 +40,7 @@ private struct GeneralSettings: View {
             Section("Behavior") {
                 Toggle("Add a space after inserted text", isOn: $prefs.appendSpace)
                 Toggle("Pause music and videos while dictating", isOn: $prefs.pauseMedia)
+                Toggle("Show live transcript in the notch", isOn: $prefs.showLiveTranscript)
                 Toggle("Launch at login", isOn: $launchAtLogin.isEnabled)
                 if let error = launchAtLogin.error {
                     Text(error).font(.caption).foregroundStyle(.red)
