@@ -56,7 +56,9 @@ struct MenuView: View {
         Divider()
 
         Button("Settings…") {
-            NSApp.activate()
+            // The menu bar menu runs in MenuBarAgent, so the click doesn't let us take focus and
+            // `NSApp.activate()` is refused, leaving Settings behind the frontmost app.
+            NSApp.activate(ignoringOtherApps: true)
             openSettings()
         }
         .keyboardShortcut(",")
