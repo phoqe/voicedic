@@ -26,6 +26,14 @@ struct VoicedicApp: App {
         }
         .menuBarExtraStyle(.menu)
 
+        Window("Voicedic", id: HomeView.windowID) {
+            HomeView(model: appDelegate.model)
+        }
+        .defaultSize(width: 780, height: 720)
+        // Opened from the menu, not at launch (which is usually login).
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+
         Settings {
             SettingsView(model: appDelegate.model)
         }

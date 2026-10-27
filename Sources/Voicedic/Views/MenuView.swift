@@ -10,6 +10,7 @@ struct MenuBarLabel: View {
 
 struct MenuView: View {
     let model: AppModel
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -55,15 +56,23 @@ struct MenuView: View {
 
         Divider()
 
+        Button("Open Voicedic") {
+            activate()
+            openWindow(id: HomeView.windowID)
+        }
         Button("Settings…") {
-            // The menu bar menu runs in MenuBarAgent, so the click doesn't let us take focus and
-            // `NSApp.activate()` is refused, leaving Settings behind the frontmost app.
-            NSApp.activate(ignoringOtherApps: true)
+            activate()
             openSettings()
         }
         .keyboardShortcut(",")
         Button("Quit Voicedic") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
+    }
+
+    /// The menu bar menu runs in MenuBarAgent, so the click doesn't let us take focus and
+    /// `NSApp.activate()` is refused, leaving the window behind the frontmost app.
+    private func activate() {
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private static func truncate(_ text: String) -> String {
