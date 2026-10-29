@@ -22,6 +22,11 @@ final class HotkeyMonitor {
         didSet { isDown = false }
     }
 
+    /// While paused, as when Settings records a new shortcut, every key passes through untouched.
+    var isPaused = false {
+        didSet { isDown = false }
+    }
+
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     /// Modifier keys held, as of the last modifier change.
@@ -76,7 +81,7 @@ final class HotkeyMonitor {
         case .flagsChanged:
             let previous = held
             held = ModifierKey.held(inFlags: flags.rawValue)
-            guard shortcut.keyCode == nil else { return false }
+            guard !isPaused, shortcut.keyCode == nil else { return false }
             if !isDown {
                 // Only pressing the last of the keys counts. Letting go of an extra one (⌘ after
                 // ⌘-fn) doesn't.
@@ -90,6 +95,7 @@ final class HotkeyMonitor {
             return false
 
         case .keyDown:
+            guard !isPaused else { return false }
             if let key = shortcut.keyCode, keyCode == Int64(key) {
                 // The shortcut's own key never types, including its auto-repeats.
                 if isDown { return true }

@@ -27,6 +27,11 @@ The only network access in local mode is the one-time model download from Huggin
 | Double-tap **fn** | Hands-free recording; press **fn** again to finish |
 | **Esc** | Cancel recording or processing |
 
+To use another shortcut, click it in Settings → General and press the new one. It can be modifiers on
+their own, like right ⌥ (a single modifier only counts on the side you pressed, so left ⌥ still types
+special characters) or ⌃⌥, or a key with modifiers, like ⌥Space or a function key. A key shortcut's
+key doesn't type while it's the shortcut.
+
 Settings (menu bar icon → Settings…) has the microphone, speech model, cleanup backend, extra instructions,
 a vocabulary list for names and jargon, and a local history of dictations. The microphone defaults to
 the Mac's built-in one, so connecting AirPods doesn't move dictation onto their mic. Launch at login is on by
@@ -52,7 +57,7 @@ make install   # copy to /Applications and open
 The build script signs with your first "Apple Development" certificate so macOS keeps the
 Microphone and Accessibility permissions across rebuilds (`CODESIGN_IDENTITY=-` for ad-hoc).
 
-On first launch, allow **Microphone** and **Accessibility** (needed to read the fn key and to paste).
+On first launch, allow **Microphone** and **Accessibility** (needed to read the shortcut and to paste).
 
 ## Test without the UI
 
@@ -73,7 +78,8 @@ Options: `--model parakeet-v2|parakeet-ultra`, `--refiner apple|claudeCode|ollam
 Sources/Voicedic/
   VoicedicApp.swift         entry point, menu bar scene
   AppModel.swift            dictation state machine: hotkey → record → transcribe → clean up → paste
-  HotkeyMonitor.swift       fn/Esc via a CGEvent tap
+  HotkeyMonitor.swift       dictation shortcut and Esc via a CGEvent tap
+  Shortcut.swift            the shortcut: modifiers alone or a key with modifiers
   AudioRecorder.swift       microphone capture, levels, resampling to 16 kHz
   Transcriber.swift         Parakeet via FluidAudio
   Refinement/               cleanup prompt, validation, and the three backends

@@ -64,6 +64,14 @@ final class AppModel {
     /// The island shows about three lines, so the preview only transcribes the latest stretch.
     private static let previewSeconds = 12.0
 
+    /// While Settings records a new shortcut, the current one doesn't dictate.
+    @ObservationIgnored var isRecordingShortcut = false {
+        didSet {
+            hotkeys.isPaused = isRecordingShortcut
+            if isRecordingShortcut { cancelRecording() }
+        }
+    }
+
     var style: RefinementStyle {
         RefinementStyle(vocabulary: prefs.vocabularyTerms, customInstructions: prefs.customInstructions)
     }

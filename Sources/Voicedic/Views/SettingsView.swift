@@ -25,6 +25,7 @@ private struct GeneralSettings: View {
         Form {
             Section("Dictation") {
                 MicrophonePicker(selection: $prefs.microphoneUID, microphones: model.microphones)
+                ShortcutRecorder(model: model)
                 LabeledContent("Hold \(shortcut)") { Text("Talk, then release to insert") }
                 LabeledContent("Double-tap \(shortcut)") { Text("Hands-free; press \(shortcut) again to finish") }
                 LabeledContent("Esc") { Text("Cancel") }
