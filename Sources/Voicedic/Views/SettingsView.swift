@@ -20,12 +20,13 @@ private struct GeneralSettings: View {
     var body: some View {
         @Bindable var prefs = model.prefs
         @Bindable var launchAtLogin = model.launchAtLogin
+        let shortcut = prefs.shortcut.displayName
 
         Form {
             Section("Dictation") {
                 MicrophonePicker(selection: $prefs.microphoneUID, microphones: model.microphones)
-                LabeledContent("Hold fn") { Text("Talk, then release to insert") }
-                LabeledContent("Double-tap fn") { Text("Hands-free; press fn again to finish") }
+                LabeledContent("Hold \(shortcut)") { Text("Talk, then release to insert") }
+                LabeledContent("Double-tap \(shortcut)") { Text("Hands-free; press \(shortcut) again to finish") }
                 LabeledContent("Esc") { Text("Cancel") }
             }
 
@@ -52,7 +53,7 @@ private struct GeneralSettings: View {
                     title: "Microphone", granted: model.microphoneAuthorized,
                     action: model.openMicrophoneSettings)
                 PermissionRow(
-                    title: "Accessibility (fn key and pasting)", granted: model.accessibilityTrusted,
+                    title: "Accessibility (shortcut and pasting)", granted: model.accessibilityTrusted,
                     action: model.openAccessibilitySettings)
             }
         }
@@ -253,7 +254,7 @@ private struct HistorySettings: View {
             .padding()
 
             if model.history.entries.isEmpty {
-                ContentUnavailableView("No dictations yet", systemImage: "waveform", description: Text("Hold fn and start talking."))
+                ContentUnavailableView("No dictations yet", systemImage: "waveform", description: Text("Hold \(prefs.shortcut.displayName) and start talking."))
             } else {
                 List(model.history.entries) { entry in
                     HistoryRow(entry: entry, copy: model.copyToClipboard)

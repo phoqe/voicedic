@@ -29,6 +29,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Voicedic listens while you hold the fn key and transcribes your speech on this Mac.</string>
+	<string>Voicedic listens while you hold your dictation shortcut and transcribes your speech on this Mac.</string>
 </dict>
 </plist>

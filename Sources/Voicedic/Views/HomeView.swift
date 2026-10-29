@@ -208,7 +208,7 @@ private struct RecentDictations: View {
             if model.history.entries.isEmpty {
                 Text(
                     model.prefs.keepHistory
-                        ? "Nothing yet. Hold fn and start talking."
+                        ? "Nothing yet. Hold \(model.prefs.shortcut.displayName) and start talking."
                         : "History is off. Turn it on in Settings to see your dictations here."
                 )
                 .foregroundStyle(.secondary)

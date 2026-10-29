@@ -63,6 +63,7 @@ enum RefinerKind: String, CaseIterable, Identifiable, Sendable {
 @Observable
 final class Preferences {
     private enum Key {
+        static let shortcut = "shortcut"
         static let speechModel = "speechModel"
         static let microphoneUID = "microphoneUID"
         static let refiner = "refiner"
@@ -81,6 +82,15 @@ final class Preferences {
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored var onSpeechModelChange: (() -> Void)?
     @ObservationIgnored var onRefinerChange: (() -> Void)?
+    @ObservationIgnored var onShortcutChange: (() -> Void)?
+
+    /// What to hold to dictate.
+    var shortcut: Shortcut {
+        didSet {
+            defaults.set(try? JSONEncoder().encode(shortcut), forKey: Key.shortcut)
+            if shortcut != oldValue { onShortcutChange?() }
+        }
+    }
 
     var speechModel: SpeechModel {
         didSet {
@@ -159,6 +169,7 @@ final class Preferences {
 
     init() {
         let d = UserDefaults.standard
+        shortcut = d.data(forKey: Key.shortcut).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) } ?? .fn
         speechModel = d.string(forKey: Key.speechModel).flatMap(SpeechModel.init) ?? .parakeetV2
         microphoneUID = d.string(forKey: Key.microphoneUID) ?? ""
         refiner = d.string(forKey: Key.refiner).flatMap(RefinerKind.init) ?? .apple

@@ -45,11 +45,11 @@ final class AppModel {
     @ObservationIgnored private var refiner: (any Refiner)?
     @ObservationIgnored private var refinerSignature: String?
 
-    /// When Fn went down, in event time (seconds since startup).
+    /// When the shortcut went down, in event time (seconds since startup).
     @ObservationIgnored private var pressStart: TimeInterval?
-    /// Set after a short Fn tap while we wait to see if a second tap (hands-free) follows.
+    /// Set after a short tap of the shortcut while we wait to see if a second tap (hands-free) follows.
     @ObservationIgnored private var pendingTapTimeout: Task<Void, Never>?
-    @ObservationIgnored private var ignoreNextFnUp = false
+    @ObservationIgnored private var ignoreNextShortcutUp = false
     @ObservationIgnored private var targetApp: NSRunningApplication?
     @ObservationIgnored private var pipelineTask: Task<Void, Never>?
     /// Transcribes the recording so far for the island's live transcript.
@@ -79,8 +79,10 @@ final class AppModel {
     func start() {
         prefs.onSpeechModelChange = { [weak self] in self?.loadSpeechModel() }
         prefs.onRefinerChange = { [weak self] in self?.prepareRefiner() }
+        prefs.onShortcutChange = { [weak self] in self?.applyShortcut() }
         recorder.onLevel = { [weak self] level in self?.overlay.model.push(level: level) }
         hotkeys.handler = { [weak self] event in self?.handle(event) ?? false }
+        applyShortcut()
 
         refreshMicrophoneStatus()
         if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
@@ -216,10 +218,16 @@ final class AppModel {
 
     // MARK: - Hotkey
 
-    /// Hold Fn to talk. Double-tap Fn for hands-free; press Fn again to finish. Esc cancels.
+    private func applyShortcut() {
+        hotkeys.shortcut = prefs.shortcut
+        overlay.model.shortcutName = prefs.shortcut.displayName
+    }
+
+    /// Hold the shortcut (fn by default) to talk. Double-tap it for hands-free; press it again to
+    /// finish. Esc cancels.
     private func handle(_ event: HotkeyMonitor.Event) -> Bool {
         switch event {
-        case .fnDown(let time):
+        case .shortcutDown(let time):
             switch phase {
             case .idle:
                 pressStart = time
@@ -228,21 +236,21 @@ final class AppModel {
                 // Second tap: lock into hands-free mode.
                 pendingTapTimeout?.cancel()
                 pendingTapTimeout = nil
-                ignoreNextFnUp = true
+                ignoreNextShortcutUp = true
                 phase = .recording(handsFree: true)
                 overlay.show(.recording(handsFree: true))
                 pauseMedia()
             case .recording(handsFree: true):
-                ignoreNextFnUp = true
+                ignoreNextShortcutUp = true
                 finishRecording()
             default:
                 break
             }
             return false
 
-        case .fnUp(let time):
-            if ignoreNextFnUp {
-                ignoreNextFnUp = false
+        case .shortcutUp(let time):
+            if ignoreNextShortcutUp {
+                ignoreNextShortcutUp = false
                 return false
             }
             guard case .recording(handsFree: false) = phase, let pressStart else { return false }
@@ -261,7 +269,7 @@ final class AppModel {
             }
             return false
 
-        case .keyWhileFnHeld:
+        case .keyWhileHeld:
             if case .recording(handsFree: false) = phase { cancelRecording() }
             return false
 
@@ -523,7 +531,7 @@ final class AppModel {
         case .downloading(let fraction): return "Downloading speech model… \(Int(fraction * 100))%"
         case .compiling: return "Optimizing speech model for this Mac…"
         case .failed(let message): return "Speech model failed: \(message)"
-        case .ready: return "Ready. Hold fn to dictate."
+        case .ready: return "Ready. Hold \(prefs.shortcut.displayName) to dictate."
         }
     }
 

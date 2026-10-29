@@ -16,6 +16,8 @@ final class OverlayModel {
     var levels: [Float] = Array(repeating: 0, count: barCount)
     /// What's been said so far while recording, shown below the waveform. Empty hides it.
     var transcript = ""
+    /// The dictation shortcut, for the hands-free hint.
+    var shortcutName = "fn"
     /// False while the island is tucked into the notch (or, on screens without one, hidden).
     var isPresented = false
     /// The camera notch on the island's screen; nil on screens without one.
@@ -239,7 +241,7 @@ private struct IslandView: View {
                             alignment: .topLeading)
                 }
                 if handsFree {
-                    Text("Hands-free · press fn to finish")
+                    Text("Hands-free · press \(model.shortcutName) to finish")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
                         .frame(height: 20, alignment: .top)
