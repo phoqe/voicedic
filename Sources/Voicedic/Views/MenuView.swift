@@ -97,8 +97,11 @@ private struct StatsSection: View {
             Text("Longest streak: \(longest) \(longest == 1 ? "day" : "days")")
         }
         Text("\(Self.compact(stats.totalWords)) words · \(stats.words(on: .now).formatted()) today")
-        if let wpm = stats.wordsPerMinute {
-            Text("\(wpm.formatted()) wpm average")
+        switch (stats.lastWordsPerMinute, stats.wordsPerMinute) {
+        case let (last?, average?): Text("\(last.formatted()) wpm last · \(average.formatted()) average")
+        case let (last?, nil): Text("\(last.formatted()) wpm last dictation")
+        case let (nil, average?): Text("\(average.formatted()) wpm average")
+        case (nil, nil): EmptyView()
         }
         Text("\(Self.duration(minutes: stats.minutesSaved)) saved vs. typing at \(Int(StatsStore.typingWordsPerMinute)) wpm")
     }

@@ -22,7 +22,11 @@ final class StatsStore {
     /// Keyed by local calendar day, "yyyy-MM-dd".
     private(set) var days: [String: DayStats] = [:]
 
-    /// A new store starts from `seed`, so dictations from before stats existed count too.
+    /// Pace of the most recent dictation long enough to measure. Not stored, so after a relaunch it
+    /// comes from history, if any.
+    private(set) var lastWordsPerMinute: Int?
+
+    /// A new store starts from `seed`, newest first, so dictations from before stats existed count too.
     init(seed: [HistoryEntry]) {
         if FileManager.default.fileExists(atPath: fileURL.path) {
             if let data = try? Data(contentsOf: fileURL),
@@ -34,11 +38,21 @@ final class StatsStore {
             for entry in seed { add(entry.text, seconds: entry.audioSeconds, at: entry.date) }
             save()
         }
+        if let entry = seed.first(where: { Self.wordsPerMinute($0.text, seconds: $0.audioSeconds) != nil }) {
+            lastWordsPerMinute = Self.wordsPerMinute(entry.text, seconds: entry.audioSeconds)
+        }
     }
 
     func record(_ text: String, seconds: Double, at date: Date = .now) {
         add(text, seconds: seconds, at: date)
+        if let wpm = Self.wordsPerMinute(text, seconds: seconds) { lastWordsPerMinute = wpm }
         save()
+    }
+
+    /// A clip under a few seconds gives a meaningless pace, so it has none.
+    private static func wordsPerMinute(_ text: String, seconds: Double) -> Int? {
+        guard seconds >= 3 else { return nil }
+        return Int((Double(wordCount(text)) / (seconds / 60)).rounded())
     }
 
     // MARK: - Totals
