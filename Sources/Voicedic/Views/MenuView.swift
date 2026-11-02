@@ -10,7 +10,6 @@ struct MenuBarLabel: View {
 
 struct MenuView: View {
     let model: AppModel
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -26,6 +25,10 @@ struct MenuView: View {
         if !model.accessibilityTrusted {
             Button("Allow Accessibility Access…") { model.openAccessibilitySettings() }
         }
+
+        Divider()
+
+        StatsSection(stats: model.stats)
 
         Divider()
 
@@ -56,10 +59,6 @@ struct MenuView: View {
 
         Divider()
 
-        Button("Open Voicedic") {
-            activate()
-            openWindow(id: HomeView.windowID)
-        }
         Button("Settings…") {
             activate()
             openSettings()
@@ -70,7 +69,7 @@ struct MenuView: View {
     }
 
     /// The menu bar menu runs in MenuBarAgent, so the click doesn't let us take focus and
-    /// `NSApp.activate()` is refused, leaving the window behind the frontmost app.
+    /// `NSApp.activate()` is refused, leaving Settings behind the frontmost app.
     private func activate() {
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -78,5 +77,37 @@ struct MenuView: View {
     private static func truncate(_ text: String) -> String {
         let singleLine = text.replacingOccurrences(of: "\n", with: " ")
         return singleLine.count > 60 ? String(singleLine.prefix(60)) + "…" : singleLine
+    }
+}
+
+/// All-time dictation stats, shown as plain lines in the menu.
+private struct StatsSection: View {
+    let stats: StatsStore
+
+    var body: some View {
+        let streak = stats.currentStreak
+        let longest = stats.longestStreak
+
+        if streak > 0 {
+            Text("\(streak)-day streak" + (stats.dictatedToday ? "" : " · dictate today to keep it"))
+        } else {
+            Text("No streak yet")
+        }
+        if longest > streak {
+            Text("Longest streak: \(longest) \(longest == 1 ? "day" : "days")")
+        }
+        Text("\(Self.compact(stats.totalWords)) words · \(stats.words(on: .now).formatted()) today")
+        if let wpm = stats.wordsPerMinute {
+            Text("\(wpm.formatted()) wpm average")
+        }
+        Text("\(Self.duration(minutes: stats.minutesSaved)) saved vs. typing at \(Int(StatsStore.typingWordsPerMinute)) wpm")
+    }
+
+    private static func compact(_ count: Int) -> String {
+        count >= 100_000 ? count.formatted(.number.notation(.compactName)) : count.formatted()
+    }
+
+    private static func duration(minutes: Double) -> String {
+        Duration.seconds(minutes * 60).formatted(.units(allowed: [.hours, .minutes], width: .narrow))
     }
 }

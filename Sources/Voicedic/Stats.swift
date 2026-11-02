@@ -9,12 +9,6 @@ struct DayStats: Codable, Equatable, Sendable {
     var dictations = 0
 }
 
-struct DayTotal: Identifiable {
-    var date: Date
-    var words: Int
-    var id: Date { date }
-}
-
 /// All-time dictation totals per day, stored locally in Application Support. They hold no text, so
 /// unlike history they aren't capped and are kept with history turned off.
 @MainActor
@@ -64,16 +58,6 @@ final class StatsStore {
     /// Minutes the words would have taken to type, minus the time spent saying them.
     var minutesSaved: Double {
         max(0, Double(totalWords) / Self.typingWordsPerMinute - totalSeconds / 60)
-    }
-
-    /// Words per day for the last `count` days, oldest first, today included.
-    func recentDays(_ count: Int) -> [DayTotal] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
-        return (0..<count).reversed().map { offset in
-            let date = calendar.date(byAdding: .day, value: -offset, to: today)!
-            return DayTotal(date: date, words: words(on: date))
-        }
     }
 
     // MARK: - Streaks
