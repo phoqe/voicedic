@@ -356,8 +356,8 @@ final class AppModel {
                     // Earlier speech fell out of the window, and the first word may be cut off.
                     text = "…" + text.drop(while: { !$0.isWhitespace })
                 }
-                // Match what cleanup will paste.
-                if prefs.refiner != .off { text = RefinementPrompt.removeHesitations(text) }
+                // Match what will be pasted.
+                text = RefinementPrompt.removeHesitations(text)
                 overlay.model.transcript = text
             }
         }
@@ -417,7 +417,9 @@ final class AppModel {
                 return
             }
 
-            var text = raw
+            // Hesitations (um, uh) go even without cleanup, and stay gone if cleanup fails.
+            let stripped = RefinementPrompt.removeHesitations(raw)
+            var text = stripped.isEmpty ? raw : stripped
             var refineSeconds: Double?
             var usedRefiner: String?
             var refinementFailure: String?
