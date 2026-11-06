@@ -36,6 +36,8 @@ final class AppModel {
     private(set) var accessibilityTrusted = false
     /// Last cleanup failure, shown in the menu so fallbacks to the raw transcript aren't silent.
     private(set) var lastRefinementError: String?
+    /// Download and load progress of the fast on-device cleanup model.
+    private(set) var mlxStatus: MLXRefiner.Status = .notLoaded
 
     @ObservationIgnored private let transcriber = Transcriber()
     @ObservationIgnored private let recorder = AudioRecorder()
@@ -212,6 +214,10 @@ final class AppModel {
             switch prefs.refiner {
             case .apple:
                 refiner = AppleRefiner()
+            case .mlx:
+                refiner = MLXRefiner { [weak self] status in
+                    Task { @MainActor in self?.mlxStatus = status }
+                }
             case .claudeCode:
                 refiner = ClaudeCodeRefiner(model: prefs.claudeModel, path: prefs.claudePath)
             case .ollama:

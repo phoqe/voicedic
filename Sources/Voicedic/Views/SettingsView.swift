@@ -140,6 +140,28 @@ private struct CleanupSettings: View {
                             .foregroundStyle(.green)
                     }
                 }
+            case .mlx:
+                Section {
+                    switch model.mlxStatus {
+                    case .notLoaded, .loading:
+                        Label("Loading the model…", systemImage: "hourglass")
+                    case .downloading(let fraction):
+                        ProgressView(value: fraction) {
+                            Text("Downloading the model (3.3 GB)… \(Int(fraction * 100))%")
+                        }
+                    case .ready:
+                        Label("Ready.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    case .failed(let message):
+                        Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    }
+                } header: {
+                    Text("Fast on-device")
+                } footer: {
+                    Text(
+                        "Runs Gemma 4 E2B on this Mac's GPU with MLX: local, and about twice as fast as Apple's model. Downloads 3.3 GB from Hugging Face once and uses about 4 GB of memory while Voicedic runs."
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
+                }
             case .claudeCode:
                 Section {
                     TextField("Model", text: $prefs.claudeModel, prompt: Text("haiku"))

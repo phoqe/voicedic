@@ -6,7 +6,8 @@ import Foundation
 ///
 ///     Voicedic --transcribe speech.wav
 ///              [--model parakeet-v2|parakeet-ultra|whisper-large-v3-turbo|cohere-transcribe]
-///              [--refiner apple|claudeCode|ollama|off] [--ollama-model qwen3:4b]
+///              [--refiner apple|mlx|claudeCode|ollama|off] [--ollama-model qwen3:4b]
+///              [--mlx-model mlx-community/gemma-4-e2b-it-4bit]
 ///              [--vocab "Voicedic,Linus"] [--repeat 2] [--warm 5]
 ///              [--chunked]  (transcribe in pieces as if recorded live, and time only the last one)
 ///     Voicedic --refine "um so like this is a test" [same options]
@@ -58,6 +59,7 @@ enum TestMode {
             let refiner: (any Refiner)? =
                 switch kind {
                 case .apple: AppleRefiner()
+                case .mlx: MLXRefiner(modelID: value("--mlx-model") ?? MLXRefiner.defaultModelID)
                 case .claudeCode: ClaudeCodeRefiner(model: value("--claude-model") ?? "haiku", path: "")
                 case .ollama:
                     OllamaRefiner(

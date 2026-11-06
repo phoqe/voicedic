@@ -40,6 +40,7 @@ enum SpeechModel: String, CaseIterable, Identifiable, Sendable {
 
 enum RefinerKind: String, CaseIterable, Identifiable, Sendable {
     case apple
+    case mlx
     case claudeCode
     case ollama
     case off
@@ -49,6 +50,7 @@ enum RefinerKind: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .apple: "Apple on-device"
+        case .mlx: "Fast on-device (MLX)"
         case .claudeCode: "Claude Code"
         case .ollama: "Ollama"
         case .off: "Off (raw transcript)"
