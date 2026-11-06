@@ -9,6 +9,10 @@ cleaned-up text is typed into whatever app you're in.
 - **Cleanup:** removes filler words and stutters, applies self-corrections ("at 3, no wait, 4"), fixes
   punctuation. Choose one:
   - **Apple on-device** (default): Apple's Foundation Models framework. Local, no download, ~1 s.
+  - **Fast on-device (MLX)**: Gemma 4 E2B on the GPU via [MLX](https://github.com/ml-explore/mlx-swift-lm).
+    Local, 0.2–0.7 s. A one-time 3.3 GB download; uses about 4 GB of memory while running. The
+    system prompt and a few worked examples are processed once and their KV cache reused, so each
+    dictation only runs the transcript.
   - **Claude Code**: your installed `claude` CLI with Haiku, using your Claude Code login (no API
     key). ~0.8 s. Not local: transcripts go to Anthropic.
   - **Ollama**: any model on your local Ollama server. Use a model of about 4B parameters or more.
@@ -65,12 +69,20 @@ The app binary has a headless mode for checking the pipeline:
 
 ```bash
 say -o /tmp/test.aiff "um so I was thinking we could meet at three no wait four"
-.build/debug/Voicedic --transcribe /tmp/test.aiff --refiner apple
-.build/debug/Voicedic --refine "what is the capital of france" --refiner claudeCode --warm 6
+make app
+build/Voicedic.app/Contents/MacOS/Voicedic --transcribe /tmp/test.aiff --refiner mlx
+build/Voicedic.app/Contents/MacOS/Voicedic --refine "what is the capital of france" --refiner claudeCode --warm 6
 ```
 
-Options: `--model parakeet-v2|parakeet-ultra`, `--refiner apple|claudeCode|ollama|off`,
-`--ollama-model NAME`, `--claude-model NAME`, `--vocab "Term1,Term2"`, `--repeat N`, `--warm SECONDS`.
+Options: `--model parakeet-v2|parakeet-ultra`, `--refiner apple|mlx|claudeCode|ollama|off`,
+`--mlx-model NAME`, `--ollama-model NAME`, `--claude-model NAME`, `--vocab "Term1,Term2"`, `--repeat N`,
+`--warm SECONDS`, `--chunked` (cut the audio as a live recording would and time only the last piece).
+
+`--mic-test` times how long the microphone takes to start. Run it through `open` so it has
+microphone access: `open -n -W --stdout /tmp/mic.txt build/Voicedic.app --args --mic-test`.
+
+Use the binary from `make app` rather than `swift build`: SwiftPM on the command line can't compile
+MLX's Metal shaders, so the build script uses `xcodebuild`.
 
 ## Layout
 
@@ -80,15 +92,16 @@ Sources/Voicedic/
   AppModel.swift            dictation state machine: hotkey → record → transcribe → clean up → paste
   HotkeyMonitor.swift       dictation shortcut and Esc via a CGEvent tap
   Shortcut.swift            the shortcut: modifiers alone or a key with modifiers
-  AudioRecorder.swift       microphone capture, levels, resampling to 16 kHz
+  AudioRecorder.swift       microphone capture, levels, resampling to 16 kHz, standby engine
+  ChunkedTranscription.swift  transcribes finished stretches at pauses while recording
   Transcriber.swift         Parakeet via FluidAudio
-  Refinement/               cleanup prompt, validation, and the three backends
+  Refinement/               cleanup prompt, validation, and the backends
   TextInserter.swift        pasteboard + ⌘V, restoring the previous clipboard
   MediaPlayback.swift       pauses playing media while dictating
   Overlay.swift             Dynamic Island-style overlay in the notch
   History.swift             local history (~/Library/Application Support/Voicedic)
   Views/                    menu and settings UI
-  TestMode.swift            headless --transcribe / --refine
+  TestMode.swift            headless --transcribe / --refine / --mic-test
 ```
 
 ## License
