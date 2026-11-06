@@ -8,7 +8,9 @@ enum Main {
         // Writing to a `claude` process that already exited must not kill the app.
         signal(SIGPIPE, SIG_IGN)
 
-        if CommandLine.arguments.contains("--transcribe") || CommandLine.arguments.contains("--refine") {
+        if CommandLine.arguments.contains("--transcribe") || CommandLine.arguments.contains("--refine")
+            || CommandLine.arguments.contains("--mic-test")
+        {
             TestMode.run(arguments: Array(CommandLine.arguments.dropFirst()))
         }
         VoicedicApp.main()

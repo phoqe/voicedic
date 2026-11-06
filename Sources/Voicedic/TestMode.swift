@@ -1,3 +1,4 @@
+import CoreAudio
 import FluidAudio
 import Foundation
 
@@ -9,6 +10,7 @@ import Foundation
 ///              [--vocab "Voicedic,Linus"] [--repeat 2] [--warm 5]
 ///              [--chunked]  (transcribe in pieces as if recorded live, and time only the last one)
 ///     Voicedic --refine "um so like this is a test" [same options]
+///     Voicedic --mic-test [--repeat 5]  (how long the microphone takes to deliver audio)
 enum TestMode {
     static func run(arguments: [String]) -> Never {
         Task.detached {
@@ -22,6 +24,10 @@ enum TestMode {
         func value(_ flag: String) -> String? {
             guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
             return arguments[index + 1]
+        }
+
+        if arguments.contains("--mic-test") {
+            return await micTest(repeats: value("--repeat").flatMap(Int.init) ?? 5)
         }
 
         do {
@@ -88,6 +94,49 @@ enum TestMode {
             print("error: \(error.localizedDescription)")
             return 1
         }
+    }
+
+    /// Starts the microphone Settings picks, as a dictation would, and times the first audio. Also
+    /// checks that the microphone is off between recordings.
+    @MainActor private static func micTest(repeats: Int) async -> Int32 {
+        let selection = UserDefaults.standard.string(forKey: "microphoneUID") ?? ""
+        let device = Microphones.deviceID(for: selection)
+        let recorder = AudioRecorder()
+        recorder.prepare(device: device)
+        try? await Task.sleep(for: .seconds(1))
+        for _ in 0..<repeats {
+            print("microphone running between recordings: \(isRunning(device))")
+            let start = Date()
+            recorder.start(device: device) { print("error: \($0.localizedDescription)") }
+            while recorder.samples(from: 0).isEmpty, Date().timeIntervalSince(start) < 5 {
+                try? await Task.sleep(for: .milliseconds(2))
+            }
+            let firstBuffer = Double(recorder.samples(from: 0).count) / AudioRecorder.sampleRate
+            print("first audio after \(Int(Date().timeIntervalSince(start) * 1000))ms, holding \(Int(firstBuffer * 1000))ms of sound")
+            try? await Task.sleep(for: .milliseconds(300))
+            _ = try? await recorder.stop()
+            try? await Task.sleep(for: .seconds(1))
+        }
+        return 0
+    }
+
+    /// Whether any process has `device` (nil: the default input) running.
+    private static func isRunning(_ device: AudioDeviceID?) -> Bool {
+        var id = device ?? 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        if device == nil {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultInputDevice, mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain)
+            AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id)
+        }
+        var running: UInt32 = 0
+        size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere, mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        AudioObjectGetPropertyData(id, &address, 0, nil, &size, &running)
+        return running != 0
     }
 
     /// Cuts `samples` the way a live recording is cut, checking every 0.5 s of audio, and times
