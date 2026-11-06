@@ -52,8 +52,6 @@ final class AppModel {
     @ObservationIgnored private var ignoreNextShortcutUp = false
     @ObservationIgnored private var targetApp: NSRunningApplication?
     @ObservationIgnored private var pipelineTask: Task<Void, Never>?
-    /// Transcribes the recording so far for the island's live transcript.
-    @ObservationIgnored private var previewTask: Task<Void, Never>?
     /// Pauses playing media during the recording. Its value is whether it paused anything.
     @ObservationIgnored private var mediaPause: Task<Bool, Never>?
     @ObservationIgnored private var modelLoadTask: Task<Void, Never>?
@@ -61,8 +59,6 @@ final class AppModel {
 
     private static let holdThreshold: TimeInterval = 0.3
     private static let doubleTapWindow: TimeInterval = 0.4
-    /// The island shows about three lines, so the preview only transcribes the latest stretch.
-    private static let previewSeconds = 12.0
 
     /// While Settings records a new shortcut, the current one doesn't dictate.
     @ObservationIgnored var isRecordingShortcut = false {
@@ -327,40 +323,9 @@ final class AppModel {
         }
         phase = .recording(handsFree: false)
         overlay.show(.recording(handsFree: false))
-        startPreview()
         prepareRefiner()
         // Wait until it's a hold, so a tap or fn used as a modifier (fn-Delete) doesn't stutter playback.
         pauseMedia(after: Self.holdThreshold)
-    }
-
-    /// While recording, transcribes the latest few seconds about twice a second so the island can
-    /// show the words as they're spoken. Passes run one at a time and stop with the recording.
-    private func startPreview() {
-        previewTask?.cancel()
-        previewTask = nil
-        guard prefs.showLiveTranscript else { return }
-        let recorder = recorder
-        let transcriber = transcriber
-        let seconds = Self.previewSeconds
-        previewTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(0.4))
-                let samples = await Task.detached { recorder.recentSamples(seconds: seconds) }.value
-                // Wait for speech: quieter than about -50 dBFS is silence.
-                guard !Task.isCancelled, samples.count >= 8_000, samples.contains(where: { abs($0) > 0.003 }),
-                    var text = try? await transcriber.transcribe(samples), !text.isEmpty
-                else { continue }
-                guard !Task.isCancelled, let self else { return }
-
-                if samples.count >= Int(seconds * 16_000) - 1_600 {
-                    // Earlier speech fell out of the window, and the first word may be cut off.
-                    text = "…" + text.drop(while: { !$0.isWhitespace })
-                }
-                // Match what will be pasted.
-                text = RefinementPrompt.removeHesitations(text)
-                overlay.model.transcript = text
-            }
-        }
     }
 
     private func cancelRecording() {
@@ -369,8 +334,6 @@ final class AppModel {
         guard case .recording = phase else { return }
         recorder.cancel()
         resumeMedia()
-        previewTask?.cancel()
-        previewTask = nil
         phase = .idle
         overlay.hide()
     }
@@ -383,17 +346,12 @@ final class AppModel {
         phase = .transcribing
         resumeMedia()
         let appName = targetApp?.localizedName
-        let preview = previewTask
-        preview?.cancel()
-        previewTask = nil
-        pipelineTask = Task { await runPipeline(appName: appName, after: preview) }
+        pipelineTask = Task { await runPipeline(appName: appName) }
     }
 
-    /// `preview` is the live transcript's task, which may still be mid-pass on the transcriber.
-    private func runPipeline(appName: String?, after preview: Task<Void, Never>?) async {
+    private func runPipeline(appName: String?) async {
         do {
             let samples = try await recorder.stop() ?? []
-            await preview?.value
             // Esc already reset the state, and a new recording may have started since.
             guard !Task.isCancelled else { return }
             let audioSeconds = Double(samples.count) / 16_000

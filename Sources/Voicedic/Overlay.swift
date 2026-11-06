@@ -14,8 +14,6 @@ final class OverlayModel {
 
     var mode: Mode = .recording(handsFree: false)
     var levels: [Float] = Array(repeating: 0, count: barCount)
-    /// What's been said so far while recording, shown below the waveform. Empty hides it.
-    var transcript = ""
     /// The dictation shortcut, for the hands-free hint.
     var shortcutName = "fn"
     /// False while the island is tucked into the notch (or, on screens without one, hidden).
@@ -53,7 +51,6 @@ final class OverlayController {
         if case .recording = mode {
             if case .recording = model.mode, model.isPresented {} else {
                 model.resetLevels()
-                model.transcript = ""
             }
         }
 
@@ -148,11 +145,8 @@ private struct IslandView: View {
     private static let notchPadding: CGFloat = 8
     private static let waveformWidth = CGFloat(OverlayModel.barCount) * 4.5 - 2
     private static let font = NSFont.systemFont(ofSize: 12, weight: .medium)
-    private static let fontLineHeight = NSLayoutManager().defaultLineHeight(for: font)
     private static let maxMessageWidth: CGFloat = 320
     private static let messageLineHeight: CGFloat = 15
-    private static let transcriptWidth: CGFloat = 340
-    private static let transcriptMaxLines = 3
 
     var body: some View {
         let size = size
@@ -173,7 +167,6 @@ private struct IslandView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.spring(duration: 0.4, bounce: 0.3), value: model.isPresented)
         .animation(.spring(duration: 0.35, bounce: 0.2), value: model.mode)
-        .animation(.spring(duration: 0.3, bounce: 0.15), value: visibleTranscript?.lines)
     }
 
     private var content: some View {
@@ -228,26 +221,12 @@ private struct IslandView: View {
     @ViewBuilder
     private var detail: some View {
         switch model.mode {
-        case .recording(let handsFree):
-            VStack(spacing: 4) {
-                if let transcript = visibleTranscript {
-                    Text(transcript.text)
-                        .font(Font(Self.font))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(Self.transcriptMaxLines)
-                        .frame(
-                            width: Self.transcriptWidth,
-                            height: CGFloat(transcript.lines) * Self.messageLineHeight,
-                            alignment: .topLeading)
-                }
-                if handsFree {
-                    Text("Hands-free · press \(model.shortcutName) to finish")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .frame(height: 20, alignment: .top)
-                        .transition(.blurReplace)
-                }
-            }
+        case .recording(handsFree: true):
+            Text("Hands-free · press \(model.shortcutName) to finish")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(height: 20, alignment: .top)
+                .transition(.blurReplace)
         case .message(let text, let isError):
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: isError ? "exclamationmark.triangle.fill" : "doc.on.clipboard")
@@ -288,24 +267,6 @@ private struct IslandView: View {
         }
     }
 
-    /// The newest words of the live transcript that fit in three lines, with older ones dropped
-    /// behind an ellipsis.
-    private var visibleTranscript: (text: String, lines: Int)? {
-        guard case .recording = model.mode else { return nil }
-        var clipped = model.transcript.hasPrefix("…")
-        var words = model.transcript.drop(while: { $0 == "…" }).split(whereSeparator: \.isWhitespace)
-        guard !words.isEmpty else { return nil }
-        while true {
-            let text = (clipped ? "…" : "") + words.joined(separator: " ")
-            let lines = Self.lineCount(text, width: Self.transcriptWidth)
-            if lines <= Self.transcriptMaxLines || words.count == 1 {
-                return (text, min(lines, Self.transcriptMaxLines))
-            }
-            words.removeFirst()
-            clipped = true
-        }
-    }
-
     private var messageSize: CGSize {
         guard case .message(let text, _) = model.mode else { return .zero }
         let width = Self.textWidth(text)
@@ -322,12 +283,8 @@ private struct IslandView: View {
         var width = (model.notch?.width ?? 0) + 2 * (wingWidth + Self.outerPadding + Self.notchPadding)
         var height = rowHeight
         switch model.mode {
-        case .recording(let handsFree):
-            if let transcript = visibleTranscript {
-                width = max(width, Self.transcriptWidth + 2 * Self.outerPadding)
-                height += CGFloat(transcript.lines) * Self.messageLineHeight + (handsFree ? 4 : 12)
-            }
-            if handsFree { height += 20 }
+        case .recording(handsFree: true):
+            height += 20
         case .message:
             width = max(width, messageSize.width + 22 + 2 * Self.outerPadding)
             height += messageSize.height + 12
@@ -346,14 +303,6 @@ private struct IslandView: View {
 
     private static func textWidth(_ text: String) -> CGFloat {
         ceil((text as NSString).size(withAttributes: [.font: font]).width) + 1
-    }
-
-    private static func lineCount(_ text: String, width: CGFloat) -> Int {
-        let bounds = (text as NSString).boundingRect(
-            with: CGSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font])
-        return max(1, Int((bounds.height / fontLineHeight).rounded()))
     }
 }
 

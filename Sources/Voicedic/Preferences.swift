@@ -75,7 +75,6 @@ final class Preferences {
         static let customInstructions = "customInstructions"
         static let appendSpace = "appendSpace"
         static let pauseMedia = "pauseMedia"
-        static let showLiveTranscript = "showLiveTranscript"
         static let keepHistory = "keepHistory"
     }
 
@@ -151,11 +150,6 @@ final class Preferences {
         didSet { defaults.set(pauseMedia, forKey: Key.pauseMedia) }
     }
 
-    /// Show the words in the island as they're spoken. Off, it shows only the recording dot and waveform.
-    var showLiveTranscript: Bool {
-        didSet { defaults.set(showLiveTranscript, forKey: Key.showLiveTranscript) }
-    }
-
     var keepHistory: Bool {
         didSet { defaults.set(keepHistory, forKey: Key.keepHistory) }
     }
@@ -181,7 +175,6 @@ final class Preferences {
         customInstructions = d.string(forKey: Key.customInstructions) ?? ""
         appendSpace = d.object(forKey: Key.appendSpace) as? Bool ?? true
         pauseMedia = d.object(forKey: Key.pauseMedia) as? Bool ?? true
-        showLiveTranscript = d.object(forKey: Key.showLiveTranscript) as? Bool ?? true
         keepHistory = d.object(forKey: Key.keepHistory) as? Bool ?? true
     }
 }
