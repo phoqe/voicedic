@@ -129,7 +129,12 @@ final class AppModel {
     }
 
     private func refreshMicrophoneStatus() {
-        microphoneAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let authorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        if authorized, !microphoneAuthorized {
+            // So the first dictation doesn't wait for the microphone to be set up.
+            recorder.prepare(device: Microphones.deviceID(for: prefs.microphoneUID))
+        }
+        microphoneAuthorized = authorized
     }
 
     private func checkAccessibility(prompt: Bool) {
