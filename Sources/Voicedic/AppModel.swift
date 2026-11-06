@@ -52,6 +52,8 @@ final class AppModel {
     @ObservationIgnored private var ignoreNextShortcutUp = false
     @ObservationIgnored private var targetApp: NSRunningApplication?
     @ObservationIgnored private var pipelineTask: Task<Void, Never>?
+    /// Transcribes the current recording a stretch at a time while it's going.
+    @ObservationIgnored private var chunks: ChunkedTranscription?
     /// Pauses playing media during the recording. Its value is whether it paused anything.
     @ObservationIgnored private var mediaPause: Task<Bool, Never>?
     @ObservationIgnored private var modelLoadTask: Task<Void, Never>?
@@ -323,6 +325,9 @@ final class AppModel {
         }
         phase = .recording(handsFree: false)
         overlay.show(.recording(handsFree: false))
+        let recorder = recorder
+        chunks = ChunkedTranscription(transcriber: transcriber) { recorder.samples(from: $0) }
+        chunks?.start()
         prepareRefiner()
         // Wait until it's a hold, so a tap or fn used as a modifier (fn-Delete) doesn't stutter playback.
         pauseMedia(after: Self.holdThreshold)
@@ -333,6 +338,8 @@ final class AppModel {
         pendingTapTimeout = nil
         guard case .recording = phase else { return }
         recorder.cancel()
+        chunks?.cancel()
+        chunks = nil
         resumeMedia()
         phase = .idle
         overlay.hide()
@@ -346,15 +353,19 @@ final class AppModel {
         phase = .transcribing
         resumeMedia()
         let appName = targetApp?.localizedName
-        pipelineTask = Task { await runPipeline(appName: appName) }
+        let chunks = chunks
+        self.chunks = nil
+        pipelineTask = Task { await runPipeline(appName: appName, chunks: chunks) }
     }
 
-    private func runPipeline(appName: String?) async {
+    private func runPipeline(appName: String?, chunks: ChunkedTranscription?) async {
+        // Stops background transcription on every early exit. After `finish` it does nothing.
+        defer { chunks?.cancel() }
         do {
             let samples = try await recorder.stop() ?? []
             // Esc already reset the state, and a new recording may have started since.
             guard !Task.isCancelled else { return }
-            let audioSeconds = Double(samples.count) / 16_000
+            let audioSeconds = Double(samples.count) / AudioRecorder.sampleRate
             guard audioSeconds >= 0.25 else {
                 phase = .idle
                 pipelineTask = nil
@@ -364,7 +375,13 @@ final class AppModel {
             overlay.show(.working("Transcribing…"))
 
             let transcribeStart = Date()
-            let raw = try await transcriber.transcribe(samples)
+            // Most of a long recording was transcribed while it was going, leaving only the end.
+            let raw =
+                if let chunks {
+                    try await chunks.finish(samples)
+                } else {
+                    try await transcriber.transcribe(samples)
+                }
             let transcribeSeconds = Date().timeIntervalSince(transcribeStart)
             try Task.checkCancellation()
             log.notice("Transcribed \(audioSeconds, format: .fixed(precision: 1))s in \(transcribeSeconds, format: .fixed(precision: 2))s")
