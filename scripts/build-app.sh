@@ -8,8 +8,16 @@ cd "$(dirname "$0")/.."
 CONFIGURATION="${CONFIGURATION:-release}"
 APP="build/Voicedic.app"
 
-swift build -c "$CONFIGURATION" --product Voicedic
-BIN_DIR="$(swift build -c "$CONFIGURATION" --show-bin-path)"
+# xcodebuild rather than `swift build`, which can't compile MLX's Metal shaders.
+case "$CONFIGURATION" in
+    release) XCODE_CONFIGURATION=Release ;;
+    debug) XCODE_CONFIGURATION=Debug ;;
+    *) XCODE_CONFIGURATION="$CONFIGURATION" ;;
+esac
+xcodebuild -quiet -scheme Voicedic -configuration "$XCODE_CONFIGURATION" \
+    -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData \
+    -skipPackagePluginValidation -skipMacroValidation build
+BIN_DIR="build/DerivedData/Build/Products/$XCODE_CONFIGURATION"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
