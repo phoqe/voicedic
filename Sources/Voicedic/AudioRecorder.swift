@@ -101,28 +101,30 @@ final class AudioRecorder: @unchecked Sendable {
 
     private func startEngine(device: AudioDeviceID?, recording: Int) throws {
         lastDevice = device
-        var engine: AVAudioEngine
-        var tap: Tap
-        var fromStandby = false
         if let standby = takeStandby(for: device) {
-            (engine, tap, fromStandby) = (standby.engine, standby.tap, true)
-        } else {
-            engine = try makeEngine(device: device)
-            tap = try configure(engine)
+            do {
+                try run(standby.engine, tap: standby.tap, recording: recording, fromStandby: true)
+                watchDelivery(of: recording, device: device, after: Self.standbyDeliveryTimeout, attempt: 1)
+                return
+            } catch {
+                // The device may have changed since the standby engine was set up.
+                log.notice("Standby microphone failed to start, setting up a new one: \(error.localizedDescription, privacy: .public)")
+            }
         }
+        try startFresh(device: device, recording: recording, attempt: 1)
+    }
 
+    private func startFresh(device: AudioDeviceID?, recording: Int, attempt: Int) throws {
+        let engine = try makeEngine(device: device)
+        let tap = try configure(engine)
+        try run(engine, tap: tap, recording: recording, fromStandby: false)
+        watchDelivery(of: recording, device: device, after: Self.freshDeliveryTimeout, attempt: attempt)
+    }
+
+    private func run(_ engine: AVAudioEngine, tap: Tap, recording: Int, fromStandby: Bool) throws {
         engineRecording = recording
         tap.recording = recording
-        do {
-            try engine.start()
-        } catch where fromStandby {
-            // The device may have changed since the standby engine was set up.
-            log.notice("Standby microphone failed to start, setting up a new one: \(error.localizedDescription, privacy: .public)")
-            engine = try makeEngine(device: device)
-            tap = try configure(engine)
-            tap.recording = recording
-            try engine.start()
-        }
+        try engine.start()
         self.engine = engine
         log.notice("Microphone started\(fromStandby ? " from standby" : "", privacy: .public): \(tap.sampleRate, format: .fixed(precision: 0)) Hz")
 
@@ -133,6 +135,38 @@ final class AudioRecorder: @unchecked Sendable {
         ) { [weak self] _ in
             guard let self else { return }
             queue.async { self.restartAfterConfigurationChange() }
+        }
+    }
+
+    // MARK: - Delivery watchdog
+
+    /// A running engine normally delivers its first buffer about 0.1 s after it starts.
+    private static let standbyDeliveryTimeout = 0.5
+    /// A new engine can take up to 3 s with a Bluetooth headset connected.
+    private static let freshDeliveryTimeout = 4.0
+
+    /// An engine can start without an error and then never deliver audio. It happens to standby
+    /// engines that sat set up for a long while (after the audio system changed underneath them).
+    /// If `recording` gets no audio in `timeout` seconds, replace its engine with a new one, and
+    /// after that report a failure instead of recording silence.
+    private func watchDelivery(of recording: Int, device: AudioDeviceID?, after timeout: TimeInterval, attempt: Int) {
+        queue.asyncAfter(deadline: .now() + timeout) { [self] in
+            // Stopped, cancelled or superseded since.
+            guard engine != nil, engineRecording == recording else { return }
+            let waiting = lock.withLock { self.recording == recording && requestedAt != nil }
+            guard waiting else { return }
+            teardown()
+            guard attempt < 2 else {
+                log.error("Microphone delivered no audio, giving up")
+                fail(RecorderError.noAudio)
+                return
+            }
+            log.notice("Microphone delivered no audio in \(timeout, format: .fixed(precision: 1))s, setting up a new one")
+            do {
+                try startFresh(device: device, recording: recording, attempt: attempt + 1)
+            } catch {
+                fail(error)
+            }
         }
     }
 
@@ -377,11 +411,13 @@ private final class Resampler: @unchecked Sendable {
 enum RecorderError: LocalizedError {
     case noInputDevice
     case unsupportedFormat
+    case noAudio
 
     var errorDescription: String? {
         switch self {
         case .noInputDevice: "No microphone found."
         case .unsupportedFormat: "The microphone's audio format isn't supported."
+        case .noAudio: "The microphone isn't sending any audio. Try again."
         }
     }
 }
