@@ -10,8 +10,7 @@ import Tokenizers
 /// downloaded from Hugging Face once, then loaded from disk without going online.
 ///
 /// The system prompt is the same for every dictation, so it's run through the model once and its
-/// KV cache kept. Each dictation then only runs the transcript, and the cache is trimmed back to
-/// the system prompt afterwards.
+/// KV cache kept. Each dictation then only runs the transcript, on a copy of that cache.
 actor MLXRefiner: Refiner {
     /// Gemma 4 E2B: the best of the small models tried at following the cleanup rules (it applies
     /// self-corrections and vocabulary spellings, and doesn't answer questions), and 0.2–0.7 s per
@@ -68,14 +67,12 @@ actor MLXRefiner: Refiner {
                 messages: messages, tools: nil, additionalContext: Self.templateContext)
 
             // Reuse the cached system prompt when the prompt starts with it, as it always should.
+            // Copy it rather than trimming it back afterwards: Gemma's sliding-window layers can't
+            // be rewound once the prompt is longer than their window, so every dictation would
+            // pile onto the last one.
             let reuse = tokens.starts(with: prefix.tokens) && tokens.count > prefix.tokens.count
-            let cache = reuse ? prefix.cache : try context.model.newCache(parameters: parameters)
+            let cache = reuse ? prefix.cache.map { $0.copy() } : try context.model.newCache(parameters: parameters)
             let input = Array(reuse ? tokens[prefix.tokens.count...] : tokens[...])
-            defer {
-                if reuse, let offset = prefix.cache.first?.offset, offset > prefix.tokens.count {
-                    _ = trimPromptCache(prefix.cache, numTokens: offset - prefix.tokens.count)
-                }
-            }
 
             let iterator = try TokenIterator(
                 input: LMInput(tokens: MLXArray(input)), model: context.model, cache: cache,
@@ -185,7 +182,7 @@ actor MLXRefiner: Refiner {
         return messages
     }
 
-    /// Runs the system prompt through the model and keeps its cache.
+    /// Runs the system prompt through the model and keeps its cache. Dictations only read it.
     private static func makePrefix(style: RefinementStyle, in container: ModelContainer) async throws -> PromptPrefix {
         let start = Date()
         let prefix = try await container.perform { context in
@@ -201,21 +198,11 @@ actor MLXRefiner: Refiner {
             shared = max(0, shared - 1)
             let tokens = Array(first[..<shared])
 
-            let parameters = GenerateParameters(maxTokens: 1, temperature: 0)
-            let cache = try context.model.newCache(parameters: parameters)
-            guard canTrimPromptCache(cache) else {
-                throw RefinementError.unavailable("This model's cache can't be reused between dictations.")
-            }
-            let iterator = try TokenIterator(
-                input: LMInput(tokens: MLXArray(tokens)), model: context.model, cache: cache, parameters: parameters)
-            let (stream, task) = generateTask(
-                promptTokenCount: tokens.count, modelConfiguration: context.configuration,
-                tokenizer: context.tokenizer, iterator: iterator)
-            for await _ in stream {}
-            await task.value
-            if let offset = cache.first?.offset, offset > tokens.count {
-                _ = trimPromptCache(cache, numTokens: offset - tokens.count)
-            }
+            // A forward pass, not a generation: generating would append a token that can't be
+            // trimmed off again.
+            let cache = try context.model.newCache(parameters: GenerateParameters(temperature: 0))
+            let logits = context.model(MLXArray(tokens).expandedDimensions(axis: 0), cache: cache)
+            eval(logits, cache)
             return PromptPrefix(style: style, tokens: tokens, cache: cache)
         }
         log.notice("Cached the cleanup prompt (\(prefix.tokens.count) tokens) in \(Date().timeIntervalSince(start), format: .fixed(precision: 2))s")
@@ -223,8 +210,8 @@ actor MLXRefiner: Refiner {
     }
 }
 
-/// The system prompt's tokens and the KV cache holding them. Only used inside the model
-/// container's `perform`, which runs one at a time.
+/// The system prompt's tokens and the KV cache holding them, never written after it's made. Only
+/// used inside the model container's `perform`, which runs one at a time.
 private final class PromptPrefix: @unchecked Sendable {
     let style: RefinementStyle
     let tokens: [Int]
